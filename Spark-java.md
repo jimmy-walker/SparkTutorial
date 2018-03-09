@@ -106,6 +106,9 @@ public class HadoopFileIoAdapter implements IIOAdapter {
 }
 ```
 
+##maven面板中clear，然后install
+自动生成在target文件夹中
+
 # 避免Override错误
 
 在重写一个类的方法时，加@override是正常的，也是阿里规约的一部分，但是在开发中加上这个注解有时候会报错：@Override is not allowed when implementing interface method，其实这也不算是个bug，是我们设置的问题，解决方案如下：
