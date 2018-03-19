@@ -168,11 +168,20 @@ Spark 执行算子之前，会将算子需要东西准备好并打包（这就�
 ```
 **在实际过程中的测试方法**：
 ```scala
-val a = sc.parallelize(Seq("互联网搜索算法也成为当今的热门方向。","算法工程师逐渐往人工智能方向发展"))
+import pinyin.parse
+val a = sc.parallelize(Seq("你好","世界"))
 val test = a.map(e=> {
-    vs.seg(e)
+    parse(e)
     })
 test.take(2)
+
+import pinyin.parse
+val a = sc.parallelize(Seq("你好","世界"))
+val b = a.toDF
+val coder: (String => String) = (d: String) => {parse(d)}
+val myfunc = udf(coder)
+val c = b.withColumn("searchterm", myfunc($"value"))
+c.show()
 ```
 
 # Spark参数补充（--driver-memory）
