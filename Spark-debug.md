@@ -17,6 +17,20 @@ http://spark.apache.org/docs/2.0.0/api/scala/index.html#org.apache.spark.sql.Dat
 比如filter只有在上面这个页面内才行。
 比如over必须在avg的返回对象Column上。
 
+##ERROR LiveListenerBus
+```linu
+17/03/28 10:56:19 ERROR LiveListenerBus: Dropping SparkListenerEvent because no remaining room in event queue. This likely means one of the SparkListeners is too slow and cannot keep up with the rate at which tasks are being started by the scheduler.
+
+17/03/28 10:56:19 WARN LiveListenerBus: Dropped 1 SparkListenerEvents since Thu Jan 01 08:00:00 CST 1970
+```
+
+当消息队列中的消息数超过其spark.scheduler.listenerbus.eventqueue.size设置的数量(如果没有设置,默认为10000)时，会将最新的消息移除，这些消息本来是通知任务运行状态的，由于你移除了，状态无法得到更新，所以会出现上面描述的现象
+
+解决方法，启动时加入下列参数：
+```linux
+--conf spark.scheduler.listenerbus.eventqueue.size=100000
+```
+
 ##ConsoleProgressBar
 What you get is a `Console Progress Bar`, `[Stage 7:` shows the stage you are in now, and `(14174 + 5) / 62500]` is `(numCompletedTasks + numActiveTasks) / totalNumOfTasksInThisStage]`. The progress bar shows `numCompletedTasks` / `totalNumOfTasksInThisStage`.
 
