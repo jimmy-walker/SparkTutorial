@@ -93,7 +93,7 @@ shuffle read的时候数据的分区数则是由spark提供的一些参数控制
 org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10.1.172.140:38469
 ```
 
-### 解决办法(我采取的是第三和第四项，并且及时注意把占内存的persist给释放掉)
+### 解决办法(一开始我采取的是第三和第四项，<u>后来我发现减少并行数cores，从8至4，第五种方法</u>)
 
 知道原因后问题就好解决了，主要从shuffle的数据量和处理shuffle数据的分区数两个角度入手。
 
@@ -114,6 +114,8 @@ org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10
 4. <u>提高executor的内存</u>
 
    <u>通过`spark.executor.memory`适当提高executor的memory值。</u>
+5. <u>降低cores数目，避免下面单个core能力低下，长期卡住：J同时的线条是cores</u>
+  ![](picture/stage-timeline-cores8.png)
 
 ##Failed to get broadcast
 ```linux
@@ -162,6 +164,23 @@ Broadcast variables are used to send some immutable state once to each worker. Y
 ##其他error
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
 J这是由于他们安装hadoop的问题。
+
+##Spark配置
+```linux
+spark-shell \
+--name jimmy_spark \
+--master yarn \
+--queue root.baseDepSarchQueue \
+--jars spark_pinyin-1.0-SNAPSHOT.jar \
+--deploy-mode client \
+--executor-memory 20G \
+--executor-cores 4 \
+--num-executors 14 \
+--conf spark.scheduler.listenerbus.eventqueue.size=100000 \
+--conf spark.default.parallelism=12 \
+--conf spark.network.timeout=1200s \
+--conf spark.sql.autoBroadcastJoinThreshold=-1
+```
 
 ## References
 - [ConsoleProgressBar](https://stackoverflow.com/questions/30245180/what-do-the-numbers-on-the-progress-bar-mean-in-spark-shell)
