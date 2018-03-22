@@ -93,7 +93,7 @@ shuffle read的时候数据的分区数则是由spark提供的一些参数控制
 org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10.1.172.140:38469
 ```
 
-### 解决办法(我采取的是第三和第四项)
+### 解决办法(我采取的是第三和第四项，并且及时注意把占内存的persist给释放掉)
 
 知道原因后问题就好解决了，主要从shuffle的数据量和处理shuffle数据的分区数两个角度入手。
 
