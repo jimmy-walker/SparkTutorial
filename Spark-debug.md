@@ -67,6 +67,54 @@ J就是在spark.sql中使用了groupby，所以特别慢。
 If you're running out of memory on the shuffle, try setting spark.sql.shuffle.partitions to 2001.
 Spark uses a different data structure for shuffle book-keeping when the number of partitions is greater than 2000:
 
+##Executor heartbeat timed out
+这是因为我们在调试出现的时候，整个程序运行流程就卡到那了。这时候 Driver 就无法接收到 Executor 发来的心跳信息了，从而产生这种异常。解决办法也很简单，只需要把下面两个参数加大即可：
+```linux
+spark.executor.heartbeatInterval
+--conf spark.network.timeout=1200s（我采取了这一方法）
+```
+spark.executor.heartbeatInterval（默认10s） 参数要远比 spark.network.timeout（默认120s） 小。
+```linux
+WARN HeartbeatReceiver: Removing executor 10 with no recent heartbeats: 309431 ms exceeds timeout 240000 ms
+[Stage 207:(7163 + 113) / 14150][Stage 209:(1445 + 0) / 6723][Stage 213:(476 + 0) / 2001]18/03/22 10:13:16 ERROR YarnScheduler: Lost executor 10 on kg-dn-81: Executor heartbeat timed out after 309431 ms
+```
+
+##WARN TaskSetManager: Lost task FetchFailedException: Failed to connect
+
+shuffle分为`shuffle write`和`shuffle read`两部分。 
+shuffle write的分区数由上一阶段的RDD分区数控制，shuffle read的分区数则是由Spark提供的一些参数控制。
+
+shuffle write可以简单理解为类似于`saveAsLocalDiskFile`的操作，将计算的中间结果按某种规则临时放到各个executor所在的本地磁盘上。
+
+shuffle read的时候数据的分区数则是由spark提供的一些参数控制。可以想到的是，如果这个参数值设置的很小，同时shuffle read的量很大，那么将会导致一个task需要处理的数据非常大。结果导致JVM crash，从而导致取shuffle数据失败，同时executor也丢失了，看到`Failed to connect to host`的错误，也就是executor lost的意思。有时候即使不会导致JVM crash也会造成长时间的gc。
+
+```linux
+[Stage 1:>(29 + 96) / 843][Stage 5:(4827 + -125) / 9888][Stage 8:(736 + 102) / 2493]18/03/21 16:38:52 WARN TaskSetManager: Lost task 7.0 in stage 11.0 (TID 34635, kg-dn-99, executor 17): FetchFailed(BlockManagerId(15, kg-dn-111, 38469, None), shuffleId=0, mapId=59, reduceId=7, message=
+org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10.1.172.140:38469
+```
+
+### 解决办法(我采取的是第三和第四项)
+
+知道原因后问题就好解决了，主要从shuffle的数据量和处理shuffle数据的分区数两个角度入手。
+
+1. 减少shuffle数据
+
+   思考是否可以使用`map side join`或是`broadcast join`来规避shuffle的产生。
+
+   将不必要的数据在shuffle前进行过滤，比如原始数据有20个字段，只要选取需要的字段进行处理即可，将会减少一定的shuffle数据。
+
+2. SparkSQL和DataFrame的join,group by等操作
+
+   通过`spark.sql.shuffle.partitions`控制分区数，默认为200，根据shuffle的量以及计算的复杂度提高这个值。
+
+3. Rdd的join,groupBy,reduceByKey等操作
+
+   <u>通过`spark.default.parallelism`控制shuffle read与reduce处理的分区数，默认为运行任务的core的总数（mesos细粒度模式为8个，local模式为本地的core总数），官方建议为设置成运行任务的core的2-3倍。</u>
+
+4. <u>提高executor的内存</u>
+
+   <u>通过`spark.executor.memory`适当提高executor的memory值。</u>
+
 ##其他error
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
 J这是由于他们安装hadoop的问题。
@@ -79,3 +127,5 @@ J这是由于他们安装hadoop的问题。
 - [Spark排错与优化](http://blog.csdn.net/lsshlsw/article/details/49155087)
 - [设置partitions](https://stackoverflow.com/questions/32349611/what-should-be-the-optimal-value-for-spark-sql-shuffle-partitions-or-how-do-we-i)
 - [top-5-mistakes-to-avoid-when-writing-apache-spark-applications第38页](https://www.slideshare.net/cloudera/top-5-mistakes-to-avoid-when-writing-apache-spark-applications)
+- [Executor heartbeat timed out](https://www.iteblog.com/archives/1192.html)
+- [Spark Shuffle FetchFailedException解决方案](http://blog.csdn.net/lsshlsw/article/details/51213610)
