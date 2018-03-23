@@ -53,7 +53,7 @@ What you get is a `Console Progress Bar`, `[Stage 7:` shows the stage you are in
 ```
 查询网上资料，这个问题就是shuffle的read量大，但是partitions太小造成的，一种是控制输入数据，第二种是修改参数，比如这里的提高partitions数目。
 
-##### 提高shuffle操作的并行度，如果我们必须要对数据倾斜迎难而上，那么建议优先使用这种方案，因为这是处理数据倾斜最简单的一种方案。
+#### 提高shuffle操作的并行度，如果我们必须要对数据倾斜迎难而上，那么建议优先使用这种方案，因为这是处理数据倾斜最简单的一种方案。
 思路：<u>**增加shuffle read task的数量，可以让原本分配给一个task的多个key分配给多个task，从而让每个task处理比原来更少的数据。**</u>举例来说，如果原本有5个key，每个key对应10条数据，这5个key都是分配给一个task的，那么这个task就要处理50条数据。而增加了shuffle read task以后，每个task就分配到一个key，即每个task就处理10条数据，那么自然每个task的执行时间都会变短了。
 
 J就是在spark.sql中使用了groupby，所以特别慢。
@@ -61,7 +61,7 @@ J就是在spark.sql中使用了groupby，所以特别慢。
 好处：方便
 缺点：对于极端情况无能为力：比如某个key对应100万数据，对于我们来说，每天一个关键词的搜索量可能最高就是几十万。但是设置过大会造成性能恶化，过多的碎片task会造成大量无谓的启动关闭task开销，还有可能导致某些task hang住无法执行。
 
-#####设置patitions的大小为2001
+####设置patitions的大小为2001
 原因：Rule of thumb is around 128 MB per partition
 但是：
 If you're running out of memory on the shuffle, try setting spark.sql.shuffle.partitions to 2001.

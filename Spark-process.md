@@ -71,3 +71,13 @@ charCounts.collect
 ```
 
 ![stage.png](picture/stage.png)
+
+### Shuffle的基本原理与特性
+
+与MapReduce计算框架一样，Spark的Shuffle实现大致如下图所示，在DAG阶段以shuffle为界，划分stage，上游stage做map task，每个map task将计算结果数据分成多份，每一份对应到下游stage的每个partition中，并将其临时写到磁盘，该过程叫做shuffle write；下游stage做reduce task，每个reduce task通过网络拉取上游stage中所有map task的指定分区结果数据，该过程叫做shuffle read，最后完成reduce的业务逻辑。举个栗子，假如上游stage有100个map task，下游stage有1000个reduce task，那么这100个map task中每个map task都会得到1000份数据，而1000个reduce task中的每个reduce task都会拉取上游100个map task对应的那份数据，即第一个reduce task会拉取所有map task结果数据的第一份，以此类推。<u>**（J注意这里的1000才是spark.sql.shuffle.partitions，该参数代表了shuffle read task的并行度，该值默认是200）**</u>
+
+![](picture/spark-shuffle-overview.png)
+
+###spark通过合理设置spark.default.parallelism参数提高执行效率
+
+Clusters will not be fully utilized unless you set the level of parallelism for each operation high enough. Spark automatically sets the number of “map” tasks to run on each file according to its size (though you can control it through optional parameters to `SparkContext.textFile`, etc), and for distributed “reduce” operations, such as `groupByKey` and `reduceByKey`, it uses the largest parent RDD’s number of partitions. You can pass the level of parallelism as a second argument (see the `spark.PairRDDFunctions` documentation), or set the config property`spark.default.parallelism` to change the default. **<u>In general, we recommend 2-3 tasks per CPU core in your cluster.</u>**
