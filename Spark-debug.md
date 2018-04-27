@@ -54,7 +54,7 @@ What you get is a `Console Progress Bar`, `[Stage 7:` shows the stage you are in
 查询网上资料，这个问题就是shuffle的read量大，但是partitions太小造成的，一种是控制输入数据，第二种是修改参数，比如这里的提高partitions数目。
 
 #### 提高shuffle操作的并行度，如果我们必须要对数据倾斜迎难而上，那么建议优先使用这种方案，因为这是处理数据倾斜最简单的一种方案。
-思路：<u>**增加shuffle read task的数量，可以让原本分配给一个task的多个key分配给多个task，从而让每个task处理比原来更少的数据。**</u>举例来说，如果原本有5个key，每个key对应10条数据，这5个key都是分配给一个task的，那么这个task就要处理50条数据。而增加了shuffle read task以后，每个task就分配到一个key，即每个task就处理10条数据，那么自然每个task的执行时间都会变短了。
+思路：**<u>增加shuffle read task的数量，可以让原本分配给一个task的多个key分配给多个task，从而让每个task处理比原来更少的数据。</u>**举例来说，如果原本有5个key，每个key对应10条数据，这5个key都是分配给一个task的，那么这个task就要处理50条数据。而增加了shuffle read task以后，每个task就分配到一个key，即每个task就处理10条数据，那么自然每个task的执行时间都会变短了。
 
 J就是在spark.sql中使用了groupby，所以特别慢。
 设置方法：`spark.conf.set("spark.sql.shuffle.partitions", 1000)`
@@ -121,12 +121,94 @@ org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10
 ```linux
 [Stage 7:(860 + 88) / 7339][Stage 10:(3 + 24) / 2001][Stage 11:>(0 + 0) / 2001]18/03/22 12:04:28 WARN TaskSetManager: Lost task 6.0 in stage 10.0 (TID 24987, kg-dn-109, executor 13): java.io.IOException: org.apache.spark.SparkException: Failed to get broadcast_19_piece0 of broadcast_19
 ```
-
 J猜测有的broacast被remove了，但是接下来的task又会去获取这些broadcast，便会直接失败。
-**<u>在代码中要么增加executor内存，要么就禁止join的自动转broadcast功能，让其还是使用sort merge join。</u>**
-```linux
---conf spark.sql.autoBroadcastJoinThreshold=-1
+本来是想禁止禁止join的自动转broadcast功能，让其还是使用sort merge join，比如`--conf spark.sql.autoBroadcastJoinThreshold=-1`。
+但是后来发现原来问题在于window function未序列化。
+###window function未序列化导致该问题
+
+**<u>J我只能认为在某些版本中存在window返回未序列化的问题。</u>**
+
+####Task not serializable
+首先会报`Task not serializable`错误，这是因为window function返回的column对象是非序列化的，这就意味着都是存在各个executor中的内存里，如果需要进一步进行计算时（比如map时），系统就会提示未进行序列化，**<u>实际上未进行序列化也是可以的，只是系统必须这么提示而已，因为下面就有种方法告诉系统这个对象不需要序列化</u>**。
+
+根据网上的[建议](https://stackoverflow.com/a/37334595/8355906)，要么就是直接对类进行序列化；要么直接在窗口对象和column对象上加上@transient的标识符。
+
+```scala
+import org.apache.spark.sql.expressions.Window
+val df = Seq(("foo", 1), ("bar", 2)).toDF("x", "y")
+val w = Window.partitionBy("x").orderBy("y")
+val lag_y = lag(col("y"), 1).over(w)
+def f(x: Any) = x.toString
+df.select(lag_y).map(f _).first //it will raise error：Task not serializable
+
+@transient val w = Window.partitionBy("x").orderBy("y")
+@transient val lag_y = lag(col("y"), 1).over(w)
+df.select(lag_y).map(f _).first //it will succeed
 ```
+
+####WARN TaskSetManager: Lost task；IOException: org.apache.spark.SparkException: Failed to get broadcast
+
+但是上述方法在真正需要离开当前的executor进行序列化传输时，那么就会报错。这个错误比较隐晦，根本就不提及是序列化的问题。分析原因：
+
+Scala provides a @transient annotation for fields that should not be serialized at all. If you mark a field as @transient, then the frame- work should not save the field even when the surrounding object is serialized. When the object is loaded, the field will be restored to the default value for the type of the field annotated as @transient.
+**<u>猜测@transient标记表明不被序列化后，就等于保存在各个executor的内存中。而由于大量操作导致内存被占用，从而导致丢失掉了被当做broadcast的值，从而无法进行join，报错。但我认为并非是broadcast，因为每个executor中的值是不一样的，与传统的broadcast的定义不一样。所以方法是先进行整体persist驻留在各个executor中。</u>**
+
+```scala
+// val window_cover_song = Window.partitionBy("cover_song")
+// val window_song = Window.partitionBy("song")
+// val df_ref_diff = df_remark_ref_final.filter($"song" =!= $"cover_song")
+//                                        .withColumn("cover_value", sum($"cover_hot").over(window_cover_song))
+//                                        .withColumn("value", max($"hot").over(window_song)) //change avg to max, cause it will exists many-many relation between song and hot, some hots are so small, it will lower the sum value, eg:凉凉
+//                                        .withColumn("term",concat($"cover_song", lit(" 原唱")))
+//                                        .withColumn("penality", $"value"*penality)
+//                                        .groupBy("term").agg(max("penality") as "result")
+//                                        .select("term", "result")
+//                                        .withColumn("alias", lit("")) 
+
+// val df_ref_eql = df_remark_ref_final.filter($"song" === $"cover_song")
+//                                       .withColumn("cover_value", sum($"cover_hot").over(window_cover_song))
+//                                       .withColumn("value", max($"hot").over(window_song)) //change avg to max, cause it will exists many-many relation between song and hot, some hots are so small, it will lower the sum value, eg:凉凉
+//                                       .withColumn("term",concat($"cover_song", lit(" 原唱")))
+//                                       .withColumn("penality", when($"cover_value" > $"value", $"value"*penality as "result").otherwise($"value"*penality*penality as "result"))
+//                                       .groupBy("term").agg(max("penality") as "result")
+//                                       .select("term", "result")
+//                                       .withColumn("alias", lit(""))
+
+@transient val window_cover_song = Window.partitionBy("cover_song")
+@transient val window_song = Window.partitionBy("song")
+val df_ref_diff_temp = df_remark_ref_final.filter($"song" =!= $"cover_song")
+val df_ref_eql_temp = df_remark_ref_final.filter($"song" === $"cover_song")
+@transient val diff_cover_value = sum(df_ref_diff_temp("cover_hot")).over(window_cover_song)
+@transient val diff_value = max(df_ref_diff_temp("hot")).over(window_song)
+//change avg to max, cause it will exists many-many relation between song and hot, some hots are so small, it will lower the sum value, eg:凉凉
+@transient val eql_cover_value = sum(df_ref_eql_temp("cover_hot")).over(window_cover_song)
+@transient val eql_value = max(df_ref_eql_temp("hot")).over(window_song)
+
+val df_ref_diff = df_ref_diff_temp.withColumn("cover_value", diff_cover_value)
+                                  .withColumn("value", diff_value)
+                                  .withColumn("term",concat($"cover_song", lit(" 原唱")))
+                                  .withColumn("penality", $"value"*penality)
+                                  .groupBy("term").agg(max("penality") as "result")
+                                  .select("term", "result")
+
+val df_ref_eql = df_ref_eql_temp.withColumn("cover_value", eql_cover_value)
+                                .withColumn("value", eql_value)
+                                .withColumn("term",concat($"cover_song", lit(" 原唱")))
+                                .withColumn("penality", when($"cover_value" > $"value", $"value"*penality as "result").otherwise($"value"*penality*penality*penality as "result"))
+                                .groupBy("term").agg(max("penality") as "result")
+                                .select("term", "result")
+
+val df_ref = df_ref_eql.union(df_ref_diff)
+                        .groupBy("term").agg(max("result") as "result")
+                        .withColumn("alias", lit(""))
+                        .select("term", "alias","result")
+df_ref.persist() 
+df_ref.count()
+
+val df_final = df_term.union(df_ref)
+                        .groupBy("term", "alias").agg(max("result") as "result")  
+```
+
 
 ###spark sql join实现
 
@@ -156,6 +238,8 @@ J猜测有的broacast被remove了，但是接下来的task又会去获取这些b
 
 从上图可以看到，不用做shuffle，可以直接在一个map中完成，通常这种join也称之为map join。那么问题来了，什么时候会用broadcast join实现呢？这个不用我们担心，spark sql自动帮我们完成，当`buildIter`的估计大小不超过参数`spark.sql.autoBroadcastJoinThreshold`设定的值(默认10M)，那么就会自动采用broadcast join，否则采用sort merge join。
 
+本来是采用`--conf spark.sql.autoBroadcastJoinThreshold=-1`，就是不让其自动broadcast，但后来我没有用，因为原来是由于其他原因造成的。
+
 ### persist/cache与broadcast的区别
 RDDs are divided into partitions. These partitions themselves act as an immutable subset of the entire RDD. When Spark executes each stage of the graph, each partition gets sent to a worker which operates on the subset of the data. In turn, each worker can cache the data if the RDD needs to be re-iterated.
 
@@ -179,7 +263,7 @@ spark-shell \
 --conf spark.scheduler.listenerbus.eventqueue.size=100000 \
 --conf spark.default.parallelism=12 \
 --conf spark.network.timeout=1200s \
---conf spark.sql.autoBroadcastJoinThreshold=-1
+
 ```
 
 ## References

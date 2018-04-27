@@ -69,3 +69,83 @@ sqlDF.show()
 ```
 
 ### 创建dataset：toDS()或as
+
+##Spark Dataframe的常用操作
+###常用操作符
+select;
+
+filter;
+
+withColumn;
+
+withColumnRenamed;
+
+groupBy...agg;
+
+###使用说明
+**<u>如果不涉及运算的，则使用""表示column；如果涉及运算的，则使用\$""表示column，因此filter常用\$""。</u>**
+
+###实例
+多个运算符可以用逗号去引导换行。
+```scala
+df_remark.filter($"type" === "4" || $"type" =!= "5")
+         .order("result".desc)
+df_remark_language.filter(not($"remark".contains("@BI_ROW_SPLIT@")))
+df_remark_music.withColumn("notion", regexp_extract($"remark", "《(.*)》", 1))
+               .withColumn("category", myfunc(regexp_replace($"remark", "《.*》", "")))
+df_sn_sep.groupBy("singer").agg(sum($"hot") as "result")
+```
+### 配合udf操作
+
+格式为`val myfunc = udf{(a:String) => 函数体}`
+
+```scala
+val alias = Map("^G.E.M.邓紫棋$|^G.E.M.邓紫棋(?=、)|(?<=、)G.E.M.邓紫棋(?=、)|(?<=、)G.E.M.邓紫棋$" -> "邓紫棋")
+val broadcasted_alias = sc.broadcast(alias)
+//没有使用 broadcast的话，每次task都要传一下，浪费内网带宽
+val myalias = udf{(a:String) => 
+  if(a != null & a != ""){
+    var result = ""
+    var str = a.trim
+    for ((k,v) <- broadcasted_alias.value){
+      val pattern = Pattern.compile(k)
+      val matcher = pattern.matcher(str)
+      if (matcher.find()){
+        str = str.substring(0, matcher.start()) + v + str.substring(matcher.end(), str.length)
+        result = str
+      }
+    }
+    result
+  }
+  else {""}
+}
+```
+
+### 常用函数
+
+#### explode
+
+把列中数据切开，并进行延展。先变成列表List，然后直接使用explode。
+
+```scala
+df_remark_music.filter($"remark".contains("@BI_ROW_SPLIT@"))
+               .withColumn("remark_new", explode(split($"remark", "@BI_ROW_SPLIT@")))
+```
+
+![](picture/spark-explode1.png)
+
+![](picture/spark-explode2.png)
+
+#### window function
+
+窗口函数可以对传统的groupBy分的组，进一步进行操作。
+
+```scala
+import org.apache.spark.sql.expressions.{Window, WindowSpec}
+val window_cover_song = Window.partitionBy("cover_song")
+val window_song = Window.partitionBy("song")
+val df= df_remark_ref_final.withColumn("cover_value", sum($"cover_hot").over(window_cover_song))
+                           .withColumn("value", max($"hot").over(window_song))
+```
+
+注意window function常会引起`Failed to get broadcast`，解决方法具体见debug章节。

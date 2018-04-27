@@ -1,4 +1,48 @@
 # Spark sql
+## Spark中dataframe执行sql操作
+
+### Spark中join类型
+
+![](picture/join-types.png)
+
+###Spark中的join格式
+
+```python
+def join(right: Dataset[_], joinExprs: Column, joinType: String): DataFrame
+
+right
+Right side of the join.
+
+joinExprs
+Join expression.
+
+joinType
+Type of join to perform. Default inner. Must be one of: inner, cross, outer, full, full_outer, left, left_outer, right, right_outer, left_semi, left_anti.
+```
+
+<u>`left` and `left_outer` joins are the same.</u>
+
+`left` and `left_outer` joins are the same.
+
+<u>`outer`, `full` and `full_outer` joins are the same.</u>
+
+```python
+    case "inner" => Inner
+    case "outer" | "full" | "fullouter" => FullOuter
+    case "leftouter" | "left" => LeftOuter
+    case "rightouter" | "right" => RightOuter
+    case "leftsemi" => LeftSemi
+    case "leftanti" => LeftAnti
+    case "cross" => Cross
+```
+
+### 例子
+
+```scala
+val df_remark_ref_cover = df_remark_ref.join(df_sn_sep, df_remark_ref("scid_albumid") === df_sn_sep("mixsongid"), "left")
+```
+
+# Spark执行hive sql
 
 ## Spark sql需要分段执行
 
@@ -31,3 +75,7 @@ val df_date = date_list.toDF
 df_date.cache
 df_date.createOrReplaceTempView("date_table")
 ```
+
+# Reference
+- [Beyond traditional join with Apache Spark](http://kirillpavlov.com/blog/2016/04/23/beyond-traditional-join-with-apache-spark/)
+- [官方手册](https://spark.apache.org/docs/latest/api/scala/index.html#org.apache.spark.sql.Dataset)
