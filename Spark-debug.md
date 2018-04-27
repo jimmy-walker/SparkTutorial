@@ -117,6 +117,16 @@ org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10
 5. <u>降低cores数目，避免下面单个core能力低下，长期卡住：J同时的线条是cores</u>
   ![](picture/stage-timeline-cores8.png)
 
+##java.lang.OutOfMemoryError: GC overhead limit exceeded
+
+This message means that for some reason the garbage collector is taking an excessive amount of time (by default 98% of all CPU time of the process) and recovers very little memory in each run (by default 2% of the heap).
+
+This effectively means that your program stops doing any progress and is busy running only the garbage collection at all time.
+
+To prevent your application from soaking up CPU time without getting anything done, the JVM throws this Error so that you have a chance of diagnosing the problem.
+解决方法增大driver内存：`--driver-memory 4G`
+
+
 ##Failed to get broadcast
 ```linux
 [Stage 7:(860 + 88) / 7339][Stage 10:(3 + 24) / 2001][Stage 11:>(0 + 0) / 2001]18/03/22 12:04:28 WARN TaskSetManager: Lost task 6.0 in stage 10.0 (TID 24987, kg-dn-109, executor 13): java.io.IOException: org.apache.spark.SparkException: Failed to get broadcast_19_piece0 of broadcast_19
@@ -260,10 +270,10 @@ spark-shell \
 --executor-memory 20G \
 --executor-cores 4 \
 --num-executors 14 \
+--driver-memory 4G \
 --conf spark.scheduler.listenerbus.eventqueue.size=100000 \
 --conf spark.default.parallelism=12 \
---conf spark.network.timeout=1200s \
-
+--conf spark.network.timeout=1200s
 ```
 
 ## References
