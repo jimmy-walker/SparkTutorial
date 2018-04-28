@@ -163,6 +163,18 @@ df.select(lag_y).map(f _).first //it will succeed
 Scala provides a @transient annotation for fields that should not be serialized at all. If you mark a field as @transient, then the frame- work should not save the field even when the surrounding object is serialized. When the object is loaded, the field will be restored to the default value for the type of the field annotated as @transient.
 **<u>猜测@transient标记表明不被序列化后，就等于保存在各个executor的内存中。而由于大量操作导致内存被占用，从而导致丢失掉了被当做broadcast的值，从而无法进行join，报错。但我认为并非是broadcast，因为每个executor中的值是不一样的，与传统的broadcast的定义不一样。所以方法是先进行整体persist驻留在各个executor中。</u>**
 
+但是有时候如下代码仍然randomly报错，我猜测是因为`df_ref.persist()`还未全部persist完成，结果下一批的task，也就是调用df_ref计算的任务已经上线，既然没有persist完成，那就只能调用原本的量了，因此就会报错。所以最稳妥的方法就是把两个都persist下来。这样就有时间差可以保证完成了。
+
+```scala
+df_ref.persist()
+df_ref.count()
+
+df_term.persist()
+df_term.count()
+```
+
+
+
 ```scala
 // val window_cover_song = Window.partitionBy("cover_song")
 // val window_song = Window.partitionBy("song")
@@ -215,6 +227,8 @@ val df_ref = df_ref_eql.union(df_ref_diff)
 df_ref.persist() 
 df_ref.count()
 
+//df_term.persist()
+//df_term.count()
 val df_final = df_term.union(df_ref)
                         .groupBy("term", "alias").agg(max("result") as "result")  
 ```
