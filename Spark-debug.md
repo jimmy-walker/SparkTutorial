@@ -163,7 +163,18 @@ df.select(lag_y).map(f _).first //it will succeed
 Scala provides a @transient annotation for fields that should not be serialized at all. If you mark a field as @transient, then the frame- work should not save the field even when the surrounding object is serialized. When the object is loaded, the field will be restored to the default value for the type of the field annotated as @transient.
 **<u>猜测@transient标记表明不被序列化后，就等于保存在各个executor的内存中。而由于大量操作导致内存被占用，从而导致丢失掉了被当做broadcast的值，从而无法进行join，报错。但我认为并非是broadcast，因为每个executor中的值是不一样的，与传统的broadcast的定义不一样。所以方法是先进行整体persist驻留在各个executor中。</u>**
 
-但是有时候如下代码仍然randomly报错，我猜测是因为`df_ref.persist()`还未全部persist完成，结果下一批的task，也就是调用df_ref计算的任务已经上线，既然没有persist完成，那就只能调用原本的量了，因此就会报错。所以最稳妥的方法就是把两个都persist下来。这样就有时间差可以保证完成了。
+但是有时候如下代码仍然randomly报错，我猜测是因为`df_ref.persist()`还未全部persist完成，结果下一批的task，也就是调用df_ref计算的任务已经上线，既然没有persist完成，那就只能调用原本的量了，因此就会报错。所以最稳妥的方法就是把两个都persist下来。这样就有时间差可以保证完成了。或者干脆在scala函数中对类进行序列化。
+
+此外，**根据[网上描述](https://stackoverflow.com/a/37378718/8355906)，如果只是一次，其实问题不大，spark的DAGScheduler会进行重启的，J既可以无视。**
+
+Sparks `DAGScheduler` and it's lower level cluster manager implementation (Standalone, YARN or Mesos) will notice a task failed and will take care of rescheduling the said task as part of the overall stages executed.
+
+```
+DAGScheduler does three things in Spark (thorough explanations follow):
+Computes an execution DAG, i.e. DAG of stages, for a job.
+Determines the preferred locations to run each task on.
+Handles failures due to shuffle output files being lost.
+```
 
 ```scala
 df_ref.persist()
@@ -172,8 +183,6 @@ df_ref.count()
 df_term.persist()
 df_term.count()
 ```
-
-
 
 ```scala
 // val window_cover_song = Window.partitionBy("cover_song")
