@@ -111,9 +111,16 @@ org.apache.spark.shuffle.FetchFailedException: Failed to connect to kg-dn-111/10
 
    <u>通过`spark.default.parallelism`控制shuffle read与reduce处理的分区数，默认为运行任务的core的总数（mesos细粒度模式为8个，local模式为本地的core总数），官方建议为设置成运行任务的core的2-3倍。</u>
 
+   **<u>J似乎其实这与partitions参数都是设置partitions数目的，只是parallelism会被dataframe所忽略，所以之前我的设置根本没啥用。</u>**
+
+   From the answer [here](https://stackoverflow.com/questions/33297689/number-reduce-tasks-spark), `spark.sql.shuffle.partitions` configures the number of partitions that are used when shuffling data for joins or aggregations.
+
+   `spark.default.parallelism` is the default number of partitions in `RDD`s returned by transformations like `join`, `reduceByKey`, and `parallelize` when not set explicitly by the user. Note that `spark.default.parallelism` seems to only be working for raw `RDD` and is ignored when working with dataframes.
+
 4. <u>提高executor的内存</u>
 
    <u>通过`spark.executor.memory`适当提高executor的memory值。</u>
+
 5. <u>降低cores数目，避免下面单个core能力低下，长期卡住：J同时的线条是cores</u>
   ![](picture/stage-timeline-cores8.png)
 
@@ -288,15 +295,14 @@ spark-shell \
 --name jimmy_spark \
 --master yarn \
 --queue root.baseDepSarchQueue \
---jars spark_pinyin-1.0-SNAPSHOT.jar \
 --deploy-mode client \
 --executor-memory 20G \
 --executor-cores 4 \
---num-executors 14 \
+--num-executors 15 \
 --driver-memory 4G \
 --conf spark.scheduler.listenerbus.eventqueue.size=100000 \
---conf spark.default.parallelism=12 \
---conf spark.network.timeout=1200s
+--conf spark.network.timeout=1200s \
+--conf spark.sql.autoBroadcastJoinThreshold=-1
 ```
 
 ## References
