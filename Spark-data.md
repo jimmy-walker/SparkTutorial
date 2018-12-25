@@ -121,6 +121,58 @@ val myalias = udf{(a:String) =>
 }
 ```
 
+注意当column内部是`arraytype`和`structtype`的情况时，则需要对于`udf`的参数不能直接用`udf{(uc: Seq[(Long, Boolean)])`。
+
+```scala
+println (df_sessions_raw.schema)
+df_sessions_raw.printSchema
+
+StructType(StructField(query,LongType,true), StructField(item_click_list,ArrayType(StructType(StructField(_1,LongType,true), StructField(_2,BooleanType,true)),true),true))
+
+root
+ |-- query: long (nullable = true)
+ |-- item_click_list: array (nullable = true)
+ |    |-- element: struct (containsNull = true)
+ |    |    |-- _1: long (nullable = true)
+ |    |    |-- _2: boolean (nullable = true)
+```
+
+因为如下可知，`arraytype`和`structtype`对应的是`Seq`和`Row`。
+
+| 数据类型      | Scala中的值类型                                              | 访问或者创建数据类型的API                                    |
+| ------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| ByteType      | Byte                                                         | ByteType                                                     |
+| ShortType     | Short                                                        | ShortType                                                    |
+| IntegerType   | Int                                                          | IntegerType                                                  |
+| LongType      | Long                                                         | LongType                                                     |
+| FloatType     | Float                                                        | FloatType                                                    |
+| DoubleType    | Double                                                       | DoubleType                                                   |
+| DecimalType   | scala.math.BigDecimal                                        | DecimalType                                                  |
+| StringType    | String                                                       | StringType                                                   |
+| BinaryType    | Array[Byte]                                                  | BinaryType                                                   |
+| BooleanType   | Boolean                                                      | BooleanType                                                  |
+| TimestampType | java.sql.Timestamp                                           | TimestampType                                                |
+| DateType      | java.sql.Date                                                | DateType                                                     |
+| ArrayType     | scala.collection.Seq                                         | ArrayType(elementType, [containsNull]) 注意containsNull默认为true |
+| MapType       | scala.collection.Map                                         | MapType(keyType, valueType, [valueContainsNull]) 注意valueContainsNull默认为true |
+| StructType    | org.apache.spark.sql.Row                                     | StructType(fields) ，注意fields是一个StructField序列，相同名字的两个StructField不被允许 |
+| StructField   | The value type in Scala of the data type of this field (For example, Int for a StructField with the data type IntegerType) | StructField(name, dataType, nullable)                        |
+
+改用如下函数
+
+```scala
+val click2distance = udf{(uc: Seq[Row]) =>
+var pre_click = -1
+uc.zipWithIndex.map{case (Row(u:Long,c:Boolean), r) =>
+  val d = r - pre_click - 1
+  if (c) pre_click = r
+  (u, c, r, d)
+}
+}
+```
+
+
+
 ### 常用函数
 
 #### explode
@@ -149,3 +201,8 @@ val df= df_remark_ref_final.withColumn("cover_value", sum($"cover_hot").over(win
 ```
 
 注意window function常会引起`Failed to get broadcast`，解决方法具体见debug章节。
+
+## Reference
+
+- [Spark 编程指南简体中文版 ](https://www.kancloud.cn/kancloud/spark-programming-guide/51563)
+- [Using Spark UDFs with struct sequences](https://stackoverflow.com/questions/45080913/using-spark-udfs-with-struct-sequences)

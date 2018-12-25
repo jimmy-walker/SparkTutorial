@@ -1,6 +1,6 @@
 # Function
 
-承接上一页关于Spark中的数据类型，这页主要讲一些主要函数操作。
+承接上一页关于Spark中的数据类型，这页主要讲一些主要函数操作。**这里假设我们使用dataframe进行操作，则需要查询相关的dataset的function。**
 
 ## orderBy和sort
 
@@ -49,3 +49,16 @@ val (hot_mean, hot_std, burst_mean, burst_std) = (df_variable.first.getDouble(0)
 df.agg(max($"age"), avg($"salary"))
 df.groupBy().agg(max($"age"), avg($"salary"))
 ```
+## distinct
+
+Returns a new Dataset that contains only the unique rows from this Dataset. This is an alias for `dropDuplicates`. 
+
+## collect
+
+Returns an array that contains all of [Row](https://spark.apache.org/docs/2.1.0/api/scala/org/apache/spark/sql/Row.html)s in this Dataset.
+
+Running collect requires moving all the data into the application's driver process, and doing so on a very large dataset can crash the driver process with OutOfMemoryError.
+
+## Reference
+
+- [dataset function](https://spark.apache.org/docs/2.1.0/api/scala/index.html#org.apache.spark.sql.Dataset)
