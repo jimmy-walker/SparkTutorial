@@ -87,6 +87,31 @@ val gamma = df_gamma.select(col("rd"), col("gamma")).as[((Int, Int), Double)].co
 
 ##Spark Dataframe的常用操作
 
+###文件中创建dataframe（先成为RDD，然后定义类，最后配合toDF进行转换）
+
+```scala
+case class Session(query: Long, item_click_list: Seq[(Long, Boolean)]) //case class help define row, toDF
+val data = spark.read.textFile("E:\\sparkdata.txt")
+val df_sessions_raw = data.map(line => line.split(" ")).map(array =>
+  Session(
+    array(0).toLong,
+    Seq((array(1).toLong, array(11).toBoolean),
+      (array(2).toLong, array(12).toBoolean),
+      (array(3).toLong, array(13).toBoolean),
+      (array(4).toLong, array(14).toBoolean),
+      (array(5).toLong, array(15).toBoolean),
+      (array(6).toLong, array(16).toBoolean),
+      (array(7).toLong, array(17).toBoolean),
+      (array(8).toLong, array(18).toBoolean),
+      (array(9).toLong, array(19).toBoolean),
+      (array(10).toLong, array(20).toBoolean)
+    )
+  )
+).toDF
+```
+
+
+
 ### var与loop搭配，对同名dataframe进行更新
 
 ```scala
