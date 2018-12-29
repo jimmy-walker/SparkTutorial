@@ -70,7 +70,38 @@ sqlDF.show()
 
 ### 创建dataset：toDS()或as
 
+There is also a new `as[U](implicit arg0: Encoder[U]): Dataset[U]`which is used to convert a `DataFrame` to a `DataSet` of a given type. For example: 
+
+```scala
+df.as[Person]
+df.select($"name", $"age".cast("int")).as[(String, Int)].collect.toMap
+```
+
+J注意as中采用的定义方法，就是类似函数中的输入参数。
+
+```scala
+val gamma = df_gamma.select(col("rd"), col("gamma")).as[((Int, Int), Double)].collect.toMap
+```
+
+
+
 ##Spark Dataframe的常用操作
+
+### var与loop搭配，对同名dataframe进行更新
+
+```scala
+var dataFrame:DataFrame = null
+for (jsonfilename <- fileArray) {
+   val eachDataFrame = hivecontext.read.json(jsonfilename)
+   if(dataFrame == null)
+      dataFrame = eachDataFrame
+   else
+      dataFrame = eachDataFrame.unionAll(dataFrame)
+}
+```
+
+
+
 ###常用操作符
 select;
 
@@ -126,7 +157,7 @@ val myalias = udf{(a:String) =>
 ```scala
 println (df_sessions_raw.schema)
 df_sessions_raw.printSchema
-
+//从这个StructField往下看：(query,LongType,true)，考虑用什么类型来代替
 StructType(StructField(query,LongType,true), StructField(item_click_list,ArrayType(StructType(StructField(_1,LongType,true), StructField(_2,BooleanType,true)),true),true))
 
 root
@@ -201,6 +232,42 @@ val df= df_remark_ref_final.withColumn("cover_value", sum($"cover_hot").over(win
 ```
 
 注意window function常会引起`Failed to get broadcast`，解决方法具体见debug章节。
+
+#### withcolumn
+
+将`stucttype`类型拆开。
+
+```scala
+    val df_sessions = df_sessions_distance.select($"query", explode($"click2distance").alias("group"))
+      .withColumn("reorder", reorder($"query", $"group"))
+      .groupBy($"reorder").agg(count("reorder").alias("cnt"))
+      .withColumn("q", $"reorder._1")
+      .withColumn("u", $"reorder._2")
+      .withColumn("r", $"reorder._3")
+      .withColumn("d", $"reorder._4")
+      .withColumn("c", $"reorder._5")
+      .select("q", "u", "r", "d", "c", "cnt")
+```
+
+```scala
++--------------------+---+
+|reorder             |cnt|
++--------------------+---+
+|[317,2909,7,4,false]|1  |
+
+StructType(StructField(reorder,StructType(StructField(_1,LongType,false), StructField(_2,LongType,false), StructField(_3,IntegerType,false), StructField(_4,IntegerType,false), StructField(_5,BooleanType,false)),true), StructField(cnt,LongType,false))
+
+root
+ |-- reorder: struct (nullable = true)
+ |    |-- _1: long (nullable = false)
+ |    |-- _2: long (nullable = false)
+ |    |-- _3: integer (nullable = false)
+ |    |-- _4: integer (nullable = false)
+ |    |-- _5: boolean (nullable = false)
+ |-- cnt: long (nullable = false)
+```
+
+
 
 ## Reference
 

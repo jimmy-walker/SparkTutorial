@@ -1,6 +1,126 @@
 # Development
 
+## 本地调试
+
+```scala
+object SparkUBM {
+  def main(args: Array[String]): Unit = {
+    System.setProperty("hadoop.home.dir", "E:\\hadoop-2.6.4") //设计hadoop home在windows下配置，https://github.com/srccodes/hadoop-common-2.2.0-bin/tree/master/bin中下载，下载winutils.exe文件复制到自己的E:\hadoop-2.6.4\bin目录里面
+    val spark = SparkSession
+      .builder()
+      .master("local") //否则报错Exception in thread "main" org.apache.spark.SparkException: A master URL must be set in your configuration
+      .appName("UBM")
+      .getOrCreate()
+    import spark.implicits._
+    val data = spark.read.textFile("E:\\sparkdatatest.txt")
+  }
+}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.music.search</groupId>
+    <artifactId>UBM</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <scala.major.version>2.11</scala.major.version>
+        <scala.version>2.11.8</scala.version>
+        <spark.version>2.1.0</spark.version>
+        <hadoop.version>2.7.1</hadoop.version>
+    </properties>
+
+    <dependencies>
+        <dependency> <!-- Hadoop dependency -->
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-common</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-mapreduce-client-core</artifactId>
+            <version>${hadoop.version}</version>
+        </dependency>
+
+        <dependency> <!-- Spark dependency -->
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-core_${scala.major.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
+        <dependency> <!-- Spark dependency -->
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-sql_${scala.major.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-mllib_${scala.major.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-hive_${scala.major.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <plugins>
+
+            <plugin>
+                <groupId>org.scala-tools</groupId>
+                <artifactId>maven-scala-plugin</artifactId>
+                <version>2.15.2</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.6.0</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.19</version>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+
+        </plugins>
+    </build>
+</project>
+```
+
 ##Hive连接
+
 具体hive有很多配置，公司中为我们部署好了环境，节省了时间。
 J这段代码比较重要，是官方的，见后文代码。
 ```scala
