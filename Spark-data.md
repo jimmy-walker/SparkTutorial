@@ -132,7 +132,7 @@ select;
 
 filter;
 
-withColumn;
+withColumn;**<u>（注意不能直接对dataframe中某一个column进行修改，只能用withcolumn和udf生成新的一列）</u>**
 
 withColumnRenamed;
 
