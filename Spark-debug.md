@@ -71,7 +71,7 @@ Spark uses a different data structure for shuffle book-keeping when the number o
 
 #### <u>trick</u>：
 
-采用在代码中重新设置分区：
+**找到代码中卡住的位置**，采用在代码中重新设置分区：
 
 ```scala
 val df_status = (df_group_pair.
