@@ -69,6 +69,46 @@ J就是在spark.sql中使用了groupby，所以特别慢。
 If you're running out of memory on the shuffle, try setting spark.sql.shuffle.partitions to 2001.
 Spark uses a different data structure for shuffle book-keeping when the number of partitions is greater than 2000:
 
+#### <u>trick</u>：
+
+采用在代码中重新设置分区：
+
+```scala
+val df_status = (df_group_pair.
+    filter($"count" >= 1).//avoid data skew //filter(!($"prev_word".contains($"next_word"))).
+    as("d1").join(df_menu_read.as("d2"), $"d1.prev_word" === $"d2.keyword", "left").
+    select($"d1.*", $"d2.name_entity" as "prev_name_entity", $"d2.similar_entity" as "prev_similar_entity", $"d2.unknown_entity" as "prev_unknown_entity", $"d2.menu_contain" as "pre_menu_contain").
+    as("d3").
+    join(df_menu_read.as("d4"), $"d3.next_word" === $"d4.keyword", "left").
+    select($"d3.*", $"d4.result" as "next_result", $"d4.menu_contain" as "menu_contain", $"d4.name_entity", $"d4.similar_entity", $"d4.unknown_entity").
+    filter($"next_result".isNotNull && $"pre_menu_contain"=!=true && $"menu_contain"=!=true).//filter tag
+    filter($"prev_name_entity".isNotNull && $"prev_similar_entity".isNotNull && $"prev_unknown_entity".isNotNull).// null means not exists
+    withColumn("status", check_status($"prev_name_entity", $"prev_similar_entity", $"prev_unknown_entity", $"name_entity", $"similar_entity", $"unknown_entity")).
+    filter($"status" === true).
+    distinct.//cause df_menu_read's keyword duplicate
+    sort($"count".desc).
+    repartition(numPartitions=2001))
+
+println("max of df_status is :" + df_status.rdd.glom().map(_.length).collect().max.toString)
+
+```
+
+
+
+采用如下多executor和多core策略，速度更快。
+
+```
+--executor-memory 20G \
+--executor-cores 2 \
+--num-executors 14 \
+而不是
+--executor-memory 40G \
+--executor-cores 1 \
+--num-executors 7 \
+```
+
+
+
 ##Executor heartbeat timed out
 这是因为我们在调试出现的时候，整个程序运行流程就卡到那了。这时候 Driver 就无法接收到 Executor 发来的心跳信息了，从而产生这种异常。解决办法也很简单，只需要把下面两个参数加大即可：
 ```linux
