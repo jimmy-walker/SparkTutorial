@@ -327,7 +327,16 @@ RDDs are divided into partitions. These partitions themselves act as an immutabl
 
 Broadcast variables are used to send some immutable state once to each worker. You use them when you want a local copy of a variable.
 
+### No more replicas available for rdd
+
+查看spark ui发现duration很长，40分钟还没结束，其余都是几秒，但是input size没有明显变大，仍然是2MB多。
+
+因此判断是否是代码逻辑中有对于kw长度的迭代，发现果然kw过长导致运算复杂。
+
+普通时kw长度为1000多，这里个bug长度为12万多。因此限制长度解决问题。
+
 ##其他error
+
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
 J这是由于他们安装hadoop的问题。
 
