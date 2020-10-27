@@ -335,6 +335,19 @@ Broadcast variables are used to send some immutable state once to each worker. Y
 
 普通时kw长度为1000多，这里个bug长度为12万多。因此限制长度解决问题。
 
+## spark.driver.maxResultSize报错
+
+`**Job aborted due to stage failure: Total size of serialized results of 3979 tasks (1024.2 MB) is bigger than spark.driver.maxResultSize (1024.0 MB)** `
+
+```
+--driver-memory 10G \
+--conf spark.driver.maxResultSize=10G
+```
+
+问题的本质：之前driver内存设置为1G，但是需要处理4000个分区，driver需要维护每个分区的状态，分区越多，消耗的driver内存越多，最终导致了driver的Out-Of-Memeory异常。日志里面说的很明白，所当将driver内存设置为10G后，问题迎刃而解。
+
+Spark常见的两类OOM问题：Driver OOM和Executor OOM。如果发生在executor，可以通过增加分区数量，减少每个executor负载。但是此时，会增加driver的负载。所以，可能同时需要增加driver内存。定位问题时，一定要先判断是哪里出现了OOM，对症下药，才能事半功倍。
+
 ##其他error
 
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
