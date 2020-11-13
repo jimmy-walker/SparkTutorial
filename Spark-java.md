@@ -4,7 +4,7 @@
 - GroupId：com.music.search（用公司迭代的样式来定义）;ArtifactId：semantic_spark（随便起）
 - 删除test文件夹
 - 将相关代码文件复制到java文件夹下
-- 在java文件夹中的resources文件夹中放入配置文件，比如hanlp中的hanlp.properties（其中第一行已经配置为hdfs路径：root=hdfs://kgdc/user/baseDepSarch/Jhanlp2/）
+- 在java文件夹中的resources文件夹中放入配置文件，比如hanlp中的hanlp.properties（其中第一行已经配置为hdfs路径：root=hdfs://XXXX/user/baseDepSarch/Jhanlp2/）
 
 ![](picture/intellij-java.png)
 
@@ -108,6 +108,68 @@ public class HadoopFileIoAdapter implements IIOAdapter {
 
 ##maven面板中clear，然后install
 自动生成在target文件夹中
+
+# spark-shell中使用hanlp
+
+- 将hanlp-portable-1.7.8.jar文件放入spark-shell的启动目录，并作为jar包引入
+
+  ```linux
+  spark-shell \
+  --name jimmy_spark \
+  --master yarn \
+  --jars ./diff-match-patch-1.2.jar,./jpinyin-1.1.8.jar,./jieba-analysis-1.0.2.jar,./hanlp-portable-1.7.8.jar \
+  --queue root.baseDepSarchQueue \
+  --deploy-mode client \
+  --executor-memory 20G \
+  --executor-cores 2 \
+  --num-executors 14 \
+  --conf spark.sql.shuffle.partitions=2001 \
+  --conf spark.network.timeout=800 \
+  --conf spark.scheduler.listenerbus.eventqueue.size=100000
+  ```
+
+- 将data文件和配置文件hanlp.properties放入HDFS中
+
+  ```linux
+  hadoop fs -mkdir Search_hanlp
+  hadoop fs -put hanlp.properties Search_hanlp/
+  hadoop fs -put data Search_hanlp/
+  ```
+
+- 在代码中加入如下配置项，指定data文件位置，注意在udf中需要引入适配器
+
+  ```scala
+  import com.hankcs.hanlp.HanLP
+  import com.hankcs.hanlp.corpus.io.IIOAdapter
+  import java.io._;
+  import org.apache.hadoop.conf.Configuration;
+  import org.apache.hadoop.fs.FileSystem;
+  import org.apache.hadoop.fs.Path;
+  import java.net.URI;
+  
+  class HadoopFileIoAdapter extends IIOAdapter {
+      @Override
+      def open(path: String): java.io.InputStream = {
+          val conf: Configuration = new Configuration();
+          val fs: FileSystem = FileSystem.get(URI.create("hdfs://XXXX/user/baseDepSarch/Search_hanlp/" + path), conf);
+          fs.open(new Path("hdfs://XXXX/user/baseDepSarch/Search_hanlp/" + path));
+      }   
+   
+      @Override
+      def create(path: String): java.io.OutputStream = {
+          val conf: Configuration = new Configuration();
+          val fs: FileSystem = FileSystem.get(URI.create("hdfs://XXXX/user/baseDepSarch/Search_hanlp/" + path), conf);
+          fs.create(new Path("hdfs://XXXX/user/baseDepSarch/Search_hanlp/" + path));
+      }
+  }
+  
+  HanLP.Config.IOAdapter = new HadoopFileIoAdapter();
+  
+  val keyword_hanlp = udf{(kw: String) =>
+      HanLP.Config.IOAdapter = new HadoopFileIoAdapter //否则会报错：Caused by: java.lang.NoClassDefFoundError: Could not initialize class com.hankcs.hanlp.tokenizer.NLPTokenizer
+      HanLP.parseDependency(kw).toString
+  }
+  ```
 
 # 避免Override错误
 
