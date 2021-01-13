@@ -111,6 +111,8 @@ public class HadoopFileIoAdapter implements IIOAdapter {
 
 # spark-shell中使用hanlp
 
+## 官方方法
+
 - 将hanlp-portable-1.7.8.jar文件放入spark-shell的启动目录，并作为jar包引入
 
   ```linux
@@ -170,6 +172,39 @@ public class HadoopFileIoAdapter implements IIOAdapter {
       HanLP.parseDependency(kw).toString
   }
   ```
+
+## 补充方法（每个worker上只进行一次实例化，J非executor）
+
+依存句法KBeamArcEagerDependencyParser的初始化非常耗时，如果按照上一节的方法调用，等于要在每个样本都初始化一次，非常耗时。又因为其非序列化，也不能将其初始化放在udf之外，然后在udf内调用，否则会报错。
+
+```scala
+val keyword_hanlp = udf{(kw: String) =>
+    HanLP.Config.IOAdapter = new HadoopFileIoAdapter //否则会报错：Caused by: java.lang.NoClassDefFoundError: Could not initialize class com.hankcs.hanlp.tokenizer.NLPTokenizer
+    val parser = new KBeamArcEagerDependencyParser()
+    parser.parse(kw).toString
+}
+```
+
+因此需要进行如下改进：
+
+- 定一个一个独立对象（scala中的独立对象可以像static一样直接被调用）
+- 在独立对象内用lazy进行初始化对象，这样在声明name时，并没有立即调用实例化方法initName(),而是在使用name时，才会调用实例化方法,并且无论缩少次调用，实例化方法只会执行一次。Scala中使用关键字lazy来定义惰性变量，实现延迟加载(懒加载)。 
+  惰性变量只能是不可变变量，并且只有在调用惰性变量时，才会去实例化这个变量。
+- 然后再在udf中调用该独立对象。 The `lazy val` ensures that each worker JVM initializes their own instance of the data. No serialization or broadcasts will be performed for `data`.因为即使在udf中直接用lazy，也会每次都初始化。Pull the object definition outside of the UDF's scope . Even being lazy, it will still reinitialize if it's defined in the scope of the UDF.
+
+```scala
+object myDependencyParser {
+    lazy val parser = new KBeamArcEagerDependencyParser()
+}
+val keyword_hanlp = udf{(kw: String) =>
+    HanLP.Config.IOAdapter = new HadoopFileIoAdapter //否则会报错：Caused by: java.lang.NoClassDefFoundError: Could not initialize class com.hankcs.hanlp.tokenizer.NLPTokenizer
+    //HanLP.parseDependency(kw).toString
+    //val parser = new KBeamArcEagerDependencyParser()
+    myDependencyParser.parser.parse(kw).toString
+}
+```
+
+[参考来源](https://stackoverflow.com/a/50806437)
 
 # 避免Override错误
 
