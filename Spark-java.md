@@ -1,14 +1,26 @@
 # 新建Java项目
 
 - Intellij中New Project，选中maven
+
 - GroupId：com.music.search（用公司迭代的样式来定义）;ArtifactId：semantic_spark（随便起）
+
 - 删除test文件夹
-- 将相关代码文件复制到java文件夹下
-- 在java文件夹中的resources文件夹中放入配置文件，比如hanlp中的hanlp.properties（其中第一行已经配置为hdfs路径：root=hdfs://XXXX/user/baseDepSarch/Jhanlp2/）
+
+- 将相关代码文件复制到java文件夹下（保证如图下方java是蓝色）
+
+- 在java文件夹中的resources文件夹中放入配置文件，比如hanlp中的hanlp.properties（其中第一行已经配置为hdfs路径：root=hdfs://XXXX/user/baseDepSarch/Jhanlp2/）（也可以在resources中不放入hanlp.properties，转而在代码中硬编码，具体可详见该github下的代码）
+
+- 注意此时由于没有将data文件打包进去，因此需要在udf中设置Hanlp的config，帮助找到数据文件地址
+
+  ```scala
+      HanLP.Config.IOAdapter = new HadoopFileIoAdapter //否则会报错：Caused by: java.lang.NoClassDefFoundError: Could not initialize class com.hankcs.hanlp.tokenizer.NLPTokenizer
+  ```
+
+  
 
 ![](picture/intellij-java.png)
 
-# maven 编译
+# maven 编译（发现可以在上述代码放置后，直接编译，无需加入下面的内容）
 ### 在pom中加入maven-resources-plugin插件，和指定resources的位置。
 从而避免找不到reources中配置文件的错误。
 
