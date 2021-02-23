@@ -348,6 +348,30 @@ Broadcast variables are used to send some immutable state once to each worker. Y
 
 Spark常见的两类OOM问题：Driver OOM和Executor OOM。如果发生在executor，可以通过增加分区数量，减少每个executor负载。但是此时，会增加driver的负载。所以，可能同时需要增加driver内存。定位问题时，一定要先判断是哪里出现了OOM，对症下药，才能事半功倍。
 
+##Container killed by YARN for exceeding memory limits
+
+Consider boosting spark.yarn.executor.memoryOverhead or disabling yarn.nodemanager.vmem-check-enabled because of YARN-4714.
+
+```
+--conf spark.yarn.executor.memoryOverhead=30G
+```
+
+##org.apache.spark.shuffle.FetchFailedException
+
+failed to allocate 16777216 byte(s) of direct memory (used: 21407727616, max: 21422538752)
+
+Spark 在处理 shuffle partition >2000 的时候为了优化起见并不会记录所有Map阶段产生的Block 大小而是会转而使用HighlyCompressedMapStatus记录. 由参数spark.shuffle.minNumPartitionsToHighlyCompress(默认2000)控制。
+
+因此将partition降低到1500，就能解决了。
+
+**J一般还是用500吧。不用太稀疏。**
+
+```
+--conf spark.sql.shuffle.partitions=1500
+```
+
+[Spark Shuffle FetchFailedException 内存溢出 源码级分析解决](https://blog.csdn.net/Jaxma/article/details/106827482)
+
 ##其他error
 
 ERROR LzoCodec: Failed to load/initialize native-lzo library。

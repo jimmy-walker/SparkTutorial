@@ -59,6 +59,96 @@ Min Resources:	<memory:307200, vCores:415>
 Max Resources:	<memory:307200, vCores:415>
 ```
 
+## 另一份参考命令
+
+```linux
+#!/bin/bash
+##********************************************************************#
+##
+## 日期支持运算，通过以下方式：
+## ${DATA_DATE offset field formatter}，
+## DATE_DATE：*固定值，为当前作业的业务时间
+## offet：*必填，当前的日期偏移量，根据field判定偏移字段，取值为数值可正可负
+## field：*必填，偏移的字段，取值可以为：day，month，year，minute，hour，week，second
+## formatter：选填，计算偏移后的日期格式，如：yyyy-MM-dd HH:mm:ss
+## 如：${DATA_DATE -1 day 'yyyy-MM-dd HH:mm'}
+##********************************************************************#
+#初始版本为001,后面修改为递增1
+VERSION="V1.00.001" 
+
+###############################引入公共函数库#########################
+source $BIPROG_ROOT/bin/shell/common.sh
+###### 输入参数 ################
+vDay="${DATA_DATE}"
+# 输入表，含text_id, content两个字段，对content进行分词
+dataTab="temp.tmp_scid_comment_text"
+# 结果表，存储分词结果
+resTab="temp.tb_scid_comment_text_seg_res"
+
+echo $vDay
+echo $dataTab
+echo $resTab
+
+
+###### spark的必调参数 ##########
+app_queue=root.default
+app_name=tb_scid_comment_text_seg_res-${vDay}
+
+executor_cores=2
+executor_memory=4G
+initialExecutors=0
+maxExecutors=200
+minExecutors=0
+driver_memory=6G
+partitions=200
+autoBroadcastJoinThreshold=200000000
+memoryOverhead=1024
+broadcastTimeout=10000
+
+executeEnv="spark-submit \
+--deploy-mode cluster  \
+--master yarn \
+--queue ${app_queue} \
+--name  ${app_name} \
+--executor-cores ${executor_cores} \
+--executor-memory ${executor_memory} \
+--driver-memory ${driver_memory} \
+--conf spark.sql.shuffle.partitions=${partitions} \
+--conf spark.dynamicAllocation.initialExecutors=${initialExecutors} \
+--conf spark.dynamicAllocation.minExecutors=${minExecutors} \
+--conf spark.dynamicAllocation.maxExecutors=${maxExecutors} \
+--conf spark.yarn.executor.memoryOverhead=${memoryOverhead} \
+--conf spark.sql.broadcastTimeout=${broadcastTimeout} \
+--conf spark.sql.autoBroadcastJoinThreshold=${autoBroadcastJoinThreshold} \
+--conf spark.ui.port=9092 \
+--conf spark.driver.maxResultSize=10g \
+--conf spark.dynamicAllocation.enabled=true \
+--conf spark.dynamicAllocation.executorIdleTimeout=300s \
+--conf spark.dynamicAllocation.schedulerBacklogTimeout=10s \
+--conf spark.dynamicAllocation.cachedExecutorIdleTimeout=300s \
+--conf spark.debug.maxToStringFields=500 \
+--conf spark.files.fetchTimeout=900s \
+--conf spark.kryoserializer.buffer.max=2000m \
+--conf spark.network.timeout=10000000 \
+--conf spark.rpc.message.maxSize=2047 \
+--conf spark.schedul.listenerbus.eventqueue.size=100000 \
+--conf spark.shuffle.service.enabled=true \
+--conf spark.yarn.archive=hdfs://XXXX/data1/sparkjars245 \
+--conf spark.yarn.dist.files=hdfs://XXXX/data1/sparkjars245/hive-site.xml \
+--conf spark.yarn.driver.memoryOverhead=1024 \
+--conf spark.default.parallelism=200 \
+--files hdfs://XXXX/user/XXXXXX/file/stanford_nlp_pos_tagger/english-left3words-distsim.tagger \
+--class net.XXXXX.segComment.segCommentWithNature \
+${seg_comment_jar}
+"
+
+${executeEnv} ${vDay} ${dataTab} ${resTab}
+if [ $? -ne 0 ]; then exit 1; fi
+```
+
+
+
 ##References
+
 - [ spark-shell运行spark任务参数设置](http://blog.csdn.net/zrc199021/article/details/52635819)
 - [Spark运行模式](http://blog.csdn.net/liangyihuai/article/details/56676878)
