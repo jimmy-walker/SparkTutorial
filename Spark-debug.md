@@ -372,6 +372,17 @@ Spark 在处理 shuffle partition >2000 的时候为了优化起见并不会记�
 
 [Spark Shuffle FetchFailedException 内存溢出 源码级分析解决](https://blog.csdn.net/Jaxma/article/details/106827482)
 
+## running beyond physical memory limits
+
+```
+2021-04-03 01:15:40 CONSOLE# Exception in thread "main" org.apache.spark.SparkException: Application application_1608206170538_5912246 finished with failed status
+021-04-03 01:15:40 CONSOLE#      diagnostics: Application application_1608206170538_5912246 failed 2 times due to AM Container for appattempt_1608206170538_5912246_000002 exited with  exitCode: -104
+2021-04-03 01:15:40 CONSOLE# For more detailed output, check application tracking page:http://kg-nn-2:8088/cluster/app/application_1608206170538_5912246Then, click on links to logs of each attempt.
+2021-04-03 01:15:40 CONSOLE# Diagnostics: Container [pid=7236,containerID=container_1608206170538_5912246_02_000001] is running beyond physical memory limits. Current usage: 2.5 GB of 2.5 GB physical memory used; 4.6 GB of 10.3 GB virtual memory used. Killing container.
+```
+
+因为executor memory是10g，cores是4.所以是2.5GB用完，因此降低cores数即可。
+
 ##其他error
 
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
