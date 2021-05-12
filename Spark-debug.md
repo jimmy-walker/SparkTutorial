@@ -356,6 +356,14 @@ Consider boosting spark.yarn.executor.memoryOverhead or disabling yarn.nodemanag
 --conf spark.yarn.executor.memoryOverhead=30G
 ```
 
+分析过程如下：
+
+原因分析：该问题是由于function函数使用的是堆外内存，默认堆外内存只有max( executorMemory * 0.10，384M)，
+
+可根据Container killed by YARN for exceeding memory limits. 19.9 GB of 14 GB physical memory used，这里的19.9G估算出堆外内存实际需要19.9G*0.1约等于1.99G，因此最少应该设置spark.yarn.executor.memoryOverhead为2G，
+
+为保险起见，我最后设置成了4G。因此没必要设置成30G，这么大，少一些就好了。
+
 ##org.apache.spark.shuffle.FetchFailedException
 
 failed to allocate 16777216 byte(s) of direct memory (used: 21407727616, max: 21422538752)
