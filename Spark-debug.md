@@ -396,6 +396,16 @@ Spark 在处理 shuffle partition >2000 的时候为了优化起见并不会记�
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
 J这是由于他们安装hadoop的问题。
 
+### spark context创建慢
+
+下面就是创建spark context的过程log，这些log完了之后，spark context就创建完了。
+
+根据时间差去反馈问题，应该是运维限制了资源。
+
+![](picture/normal_speed.jpg)
+
+![](picture/abnormal_speed.jpg)
+
 ##Spark配置
 ```linux
 spark-shell \
