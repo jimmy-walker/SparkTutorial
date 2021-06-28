@@ -396,17 +396,101 @@ Spark 在处理 shuffle partition >2000 的时候为了优化起见并不会记�
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
 J这是由于他们安装hadoop的问题。
 
-### spark context创建慢
+### spark context创建慢，是因为resourcemanager返回资源慢
 
 下面就是创建spark context的过程log，这些log完了之后，spark context就创建完了。
 
-根据时间差去反馈问题，应该是运维限制了资源。
+根据时间差去反馈问题，应该是resourcemanager处理其他队列的资源，因此减少了这个队列的返回。
 
 ![](picture/normal_speed.jpg)
 
 ![](picture/abnormal_speed.jpg)
 
+总体过程是这样的，以client为例：
+
+```
+1.启动Driver和WebUI
+2.为ApplicationMaser准备Container以及设置运行环境并启动AM
+3.上传配置信息以及Jar包
+4.提交到Yarn上面进行执行
+5.监控任务的运行状态
+6.提交missing task和Result Stage
+7.运行Task得到运行结果
+8.停止WebUI、停止Executor、停止SparkContext、删除临时目录
+```
+
+日志针对的相应操作信息，对上述的相似描写：
+
+```
+1.Running Spark version 2.4.5 SparkContext----->开始准备启动
+2.INFO Utils: Successfully started service 'sparkDriver' on port 36991.----->启动Driver
+3.Start server connector----->开始准备连接
+4.Started SparkUI----->启动SparkwebUI
+5.Added JAR file:/home/hadoop/app/spark/examples/jars/spark-examples_2.12-2.4.5.jar----->上传Jar包到Spark
+6.Connecting to ResourceManager----->连接到Resourcemanager
+7.Setting up container launch context for our AM-----> 为ApplicationMaster准备container
+8.Setting up the launch environment for our AM container----->为ApplicationMaster设置container的运行环境
+9.Preparing resources for our AM container----->为ApplicationMaster 准备资源
+10.Uploading resource file:/tmp/xx/__spark_conf__14378.zip -> hdfs://xxx/__spark_conf__.zip----->上传Spark 的配置文件
+11.Submitting application application_1604816619741_0001 to ResourceManager ----->提交任务到ResourceManager
+12.Application report for application_1604816619741_0001 (state: ACCEPTED) ----->监控任务的运行状态
+13.Application report for application_1604816619741_0001 (state: RUNNING)
+14.Application application_1604816619741_0001 has started running.----->资源分配合适开始运行Spark任务
+15.NettyBlockTransferService: Server created on bigdata01:44993----->创建Netty连接
+16.INFO BlockManagerMaster: Registered BlockManager ----->注册Blockmanager
+17.Registered executor NettyRpcEndpointRef----->注册executor NettyRpcEndpointRef
+18.INFO SparkContext: Starting job----->启动任务
+19.INFO DAGScheduler: Got job 0 (reduce at SparkPi.scala:38) with 2 output partitions-----> partition信息
+20.INFO DAGScheduler: Submitting 2 missing tasks from ResultStage 0 ----->提交missing的task fro ResultStage
+21.INFO YarnScheduler: Adding task set 0.0 with 2 tasks
+22.INFO TaskSetManager: Starting task 0.0 in stage 0.0 ----->启动Task
+23.INFO BlockManagerInfo: Added broadcast_0_piece0 in memory on bigdata01:44924 
+24.INFO TaskSetManager: Finished task 0.0 in stage 0.0 (TID 0) ----->TaskS完成
+25.INFO DAGScheduler: ResultStage 0 (reduce at SparkPi.scala:38) finished in 5.051 s
+26.INFO DAGScheduler: Job 0 finished:----->job完成
+27.Pi is roughly 3.1423357116785584 ----->得到PI的计算结果
+28.INFO SparkUI: Stopped Spark web UI at http://bigdata01:4040 ----->停止SparkWebUI
+29.INFO YarnClientSchedulerBackend: Shutting down all executors----->停止所有的executor
+30.INFO YarnClientSchedulerBackend: Stopped
+```
+
+具体本地的log：
+
+可以看到首先是`Submitting application application_1620535124225_2671397 to ResourceManager`，然后得到`ApplicationMaster host`后，显示`Application application_1620535124225_2671397 has started running`。
+
+```
+2021-06-28 12:51:33 CONSOLE# 21/06/28 12:51:33 INFO Client: Submitting application application_1620535124225_2671397 to ResourceManager
+2021-06-28 12:51:33 CONSOLE# 21/06/28 12:51:33 INFO YarnClientImpl: Submitted application application_1620535124225_2671397
+2021-06-28 12:51:33 CONSOLE# 21/06/28 12:51:33 INFO SchedulerExtensionServices: Starting Yarn extension services with app application_1620535124225_2671397 and attemptId None
+2021-06-28 12:51:34 CONSOLE# 21/06/28 12:51:34 INFO Client: 
+2021-06-28 12:51:34 CONSOLE# 	 client token: N/A
+2021-06-28 12:51:34 CONSOLE# 	 diagnostics: AM container is launched, waiting for AM container to Register with RM
+2021-06-28 12:51:34 CONSOLE# 	 ApplicationMaster host: N/A
+2021-06-28 12:51:34 CONSOLE# 	 ApplicationMaster RPC port: -1
+2021-06-28 12:51:34 CONSOLE# 	 queue: root.XXXXX
+2021-06-28 12:51:34 CONSOLE# 	 start time: 1624855893792
+2021-06-28 12:51:34 CONSOLE# 	 final status: UNDEFINED
+2021-06-28 12:51:34 CONSOLE# 	 tracking URL: http://10.5.132.8:5004/proxy/application_1620535124225_2671397/
+2021-06-28 12:51:34 CONSOLE# 	 user: jimmylian
+2021-06-28 12:51:38 CONSOLE# 21/06/28 12:51:38 INFO YarnClientSchedulerBackend: Add WebUI Filter. org.apache.hadoop.yarn.server.webproxy.amfilter.AmIpFilter, Map(PROXY_HOSTS -> 10.5.XXX.XXX,10.5.XXX.XXX, PROXY_URI_BASES -> http://10.5.132.3:5004/proxy/application_1620535124225_2671397,http://10.5.XXX.XXX:5004/proxy/application_1620535124225_2671397, RM_HA_URLS -> 10.5.132.3:5004,10.5.132.8:5004), /proxy/application_1620535124225_2671397
+2021-06-28 12:51:38 CONSOLE# 21/06/28 12:51:38 INFO YarnSchedulerBackend$YarnSchedulerEndpoint: ApplicationMaster registered as NettyRpcEndpointRef(spark-client://YarnAM)
+2021-06-28 12:51:38 CONSOLE# 21/06/28 12:51:38 INFO Client: 
+2021-06-28 12:51:38 CONSOLE# 	 client token: N/A
+2021-06-28 12:51:38 CONSOLE# 	 diagnostics: N/A
+2021-06-28 12:51:38 CONSOLE# 	 ApplicationMaster host: 10.5.XXX.XXX
+2021-06-28 12:51:38 CONSOLE# 	 ApplicationMaster RPC port: -1
+2021-06-28 12:51:38 CONSOLE# 	 queue: root.baseDepSarchQueue
+2021-06-28 12:51:38 CONSOLE# 	 start time: 1624855893792
+2021-06-28 12:51:38 CONSOLE# 	 final status: UNDEFINED
+2021-06-28 12:51:38 CONSOLE# 	 tracking URL: http://10.5.132.8:5004/proxy/application_1620535124225_2671397/
+2021-06-28 12:51:38 CONSOLE# 	 user: XXXXXXX
+2021-06-28 12:51:38 CONSOLE# 21/06/28 12:51:38 INFO YarnClientSchedulerBackend: Application application_1620535124225_2671397 has started running.
+```
+
+
+
 ##Spark配置
+
 ```linux
 spark-shell \
 --name jimmy_spark \
