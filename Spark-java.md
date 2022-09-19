@@ -281,6 +281,25 @@ Spark 执行算子之前，会将算子需要东西准备好并打包（这就�
             return util.process(i);
         })
 ```
+**方法2在scala的解决方法，用`object`实现静态方法：**
+
+```scala
+    object Tagger {
+      val modelpath = "edu/stanford/nlp/models/pos-tagger/english-left3words-distsim.tagger"
+      val entagger = new MaxentTagger(modelpath)
+
+      def all_entagger(content: String): String = {
+        entagger.tagString(content)
+      }
+    }
+
+    val seg_content = udf{(content: String) =>
+      var result = new ListBuffer[(String, String)]()
+      val result_pre = Tagger.all_entagger(content)
+      result_pre
+    }
+
+```
 **在实际过程中的测试方法**：
 ```scala
 import pinyin.parse
