@@ -411,7 +411,7 @@ I believe failed tasks are resubmitted because I have seen the same failed task 
 
 org.apache.spark.SparkException: Job aborted due to stage failure: Task 120 in stage 91.0 failed 4 times, most recent failure: Lost task 120.3 in stage 91.0
 
-##其他error
+## 其他error
 
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
 J这是由于他们安装hadoop的问题。
