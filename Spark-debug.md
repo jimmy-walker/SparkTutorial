@@ -391,6 +391,26 @@ Spark 在处理 shuffle partition >2000 的时候为了优化起见并不会记�
 
 因为executor memory是10g，cores是4.所以是2.5GB用完，因此降低cores数即可。
 
+## Thread XXX spilling sort data of XXXX MB to disk
+
+关于spark.sql.shuffle.partitions的定义可见[spark sql join](https://jimmy-walker.gitbook.io/sparktutorial/spark-debug#spark-sql-join-shi-xian)的分析。
+这里发现的问题是，初始设置spark.sql.shuffle.partitions=500，发现某个task一直在处理，查询相关spark ui中的task的stderr发现driver一直在报`spilling sort data of`，并且发现该task的Shuffle Spill (Memory)异常大1000多G，其他task只有几十G。
+
+备注shuffle spill跟shuffle write总体上来说不是同一类型的操作，shuffle spill表示executor内存不足以存放数据，从而spill到其他位置；shuffle write表示executor之间的数据传递大小。
+因为shuffle write涉及到若需要溢写，将集合中的数据根据partitionId和key（若需要）排序后顺序溢写到一个临时的磁盘文件，并释放内存新建一个map放数据，每次溢写都是写一个新的临时文件。
+
+所以说想为了解决数据倾斜，将spark.sql.shuffle.partitions调大，但是导致某个executor扛不住数据，需要spill到disk上，反而耽误了时间。
+将其调整回spark.sql.shuffle.partitions=200。就能避免该问题。
+官网有相关的spark.sql.shuffle.partitions配置方法，有空[细看](https://nealanalytics.com/blog/databricks-spark-jobs-optimization-techniques-shuffle-partition-technique-part-1/)
+
+
+## TASK FAILED应对方法
+
+网上认为会重新提交，因此不用查过往历史记录，只要通过即可。
+I believe failed tasks are resubmitted because I have seen the same failed task submitted multiple times on the Web UI. However, if the same task fails multiple times, the full job fail:
+
+org.apache.spark.SparkException: Job aborted due to stage failure: Task 120 in stage 91.0 failed 4 times, most recent failure: Lost task 120.3 in stage 91.0
+
 ##其他error
 
 ERROR LzoCodec: Failed to load/initialize native-lzo library。
