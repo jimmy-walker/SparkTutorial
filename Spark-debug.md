@@ -396,7 +396,11 @@ Spark 在处理 shuffle partition >2000 的时候为了优化起见并不会记�
 关于spark.sql.shuffle.partitions的定义可见[spark sql join](https://jimmy-walker.gitbook.io/sparktutorial/spark-debug#spark-sql-join-shi-xian)的分析。
 这里发现的问题是，初始设置spark.sql.shuffle.partitions=500，发现某个task一直在处理，查询相关spark ui中的task的stderr发现driver一直在报`spilling sort data of`，并且发现该task的Shuffle Spill (Memory)异常大1000多G，其他task只有几十G。
 
-备注shuffle spill跟shuffle write总体上来说不是同一类型的操作，shuffle spill表示executor内存不足以存放数据，从而spill到其他位置；shuffle write表示executor之间的数据传递大小。
+相关知识：
+shuffle spill memory： 表示spill过程中没有序列化的在内存的数据。
+shuffle spill disk：表示spill结束后spill到disk的序列化后的数据。
+shuffle write： 表示数据在executor之间移动，例如join、groupBy等操作。
+shuffle spill跟shuffle write总体上来说不是同一类型的操作，shuffle spill表示executor内存不足以存放数据，从而spill到其他位置；shuffle write表示executor之间的数据传递大小。
 因为shuffle write涉及到若需要溢写，将集合中的数据根据partitionId和key（若需要）排序后顺序溢写到一个临时的磁盘文件，并释放内存新建一个map放数据，每次溢写都是写一个新的临时文件。
 
 所以说想为了解决数据倾斜，将spark.sql.shuffle.partitions调大，但是导致某个executor扛不住数据，需要spill到disk上，反而耽误了时间。
