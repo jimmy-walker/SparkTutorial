@@ -419,9 +419,13 @@ org.apache.spark.SparkException: Job aborted due to stage failure: Task 120 in s
 虽然ui上面显示2 failed。但是successed仍然是500。这意味着虽然这两个task失败了，但是spark重试后，全部500个task都成功了。
 即使task页面，看到status还是failed，只要还在跑就是没问题。
 但是过多重试会拖慢速度，少量的可以忽略，有空可以查到原因解决掉。
+
 ![](picture/task failed.png)
+
 ![](picture/dead executor.png)
+
 ![](picture/status failed.png)
+
 
 ## 其他error
 
